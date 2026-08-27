@@ -2,6 +2,7 @@
   "expo": {
     "name": "UBIS Identification",
     "slug": "ubis-identification",
+    "scheme": "ubisidentification",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -40,6 +41,13 @@
         {
           "backgroundColor": "#0B0F14",
           "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["image/*"],
+          "disableIOS": true
         }
       ]
     ],

@@ -15,6 +15,7 @@ Example info.txt:
     city=Chennai
     lat=13.0827
     lng=80.2707
+    address=12 Anna Nagar, Chennai, Tamil Nadu 600040
     tattoo=om symbol on left forearm
     belongings=backpack, cell phone
 
@@ -104,6 +105,7 @@ def main() -> None:
             last_known_city=info.get("city", ""),
             last_known_lat=float(info["lat"]) if info.get("lat") else None,
             last_known_lng=float(info["lng"]) if info.get("lng") else None,
+            address=info.get("address", ""),
             tattoo_description=info.get("tattoo", ""),
             known_belongings=info.get("belongings", ""),
             notes=info.get("notes", ""),

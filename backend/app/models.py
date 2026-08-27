@@ -49,6 +49,7 @@ class ReferencePerson(Base):
     last_known_city: Mapped[str] = mapped_column(String(128), default="")
     last_known_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_known_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    address: Mapped[str] = mapped_column(Text, default="")
     tattoo_description: Mapped[str] = mapped_column(Text, default="")
     known_belongings: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")

@@ -12,6 +12,7 @@ export type PersonBrief = {
   sex: string;
   age: number | null;
   last_known_city: string;
+  address: string;
   face_photo_path: string | null;
 };
 
@@ -20,6 +21,24 @@ export type Person = PersonBrief & {
   known_belongings: string;
   notes: string;
   fingerprint_path: string | null;
+};
+
+export type IdentifyComponent = {
+  modality: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  detail: string;
+};
+
+export type FingerprintIdentifyResult = {
+  matched: boolean;
+  confidence: string;
+  score: number;
+  quality: number;
+  message: string;
+  components: IdentifyComponent[];
+  person: Person | null;
 };
 
 export type Evidence = {
@@ -193,6 +212,29 @@ export const api = {
   latestMatch: (caseId: number) => request<MatchRun>(`/cases/${caseId}/matches/latest`),
 
   getPerson: (id: number) => request<Person>(`/persons/${id}`),
+
+  identifyFingerprint: async (
+    fingerprintUri: string,
+    facePhotoUri?: string | null
+  ): Promise<FingerprintIdentifyResult> => {
+    const toFile = (uri: string, fallback: string) => {
+      const name = uri.split('/').pop() || fallback;
+      const ext = (name.split('.').pop() || 'jpg').toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : ext === 'bmp' ? 'image/bmp' : 'image/jpeg';
+      return { uri, name, type: mime } as any;
+    };
+
+    const form = new FormData();
+    form.append('fingerprint', toFile(fingerprintUri, 'fingerprint.jpg'));
+    if (facePhotoUri) {
+      form.append('face_photo', toFile(facePhotoUri, 'face.jpg'));
+    }
+
+    return request<FingerprintIdentifyResult>('/persons/identify/fingerprint', {
+      method: 'POST',
+      body: form,
+    });
+  },
 
   recordDecision: (caseId: number, payload: Record<string, any>) =>
     request<CaseDetail>(`/cases/${caseId}/decision`, {

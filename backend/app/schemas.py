@@ -24,6 +24,7 @@ class PersonBrief(BaseModel):
     sex: str
     age: int | None
     last_known_city: str
+    address: str
     face_photo_path: str | None
 
 
@@ -32,6 +33,16 @@ class PersonOut(PersonBrief):
     known_belongings: str
     notes: str
     fingerprint_path: str | None
+
+
+class FingerprintIdentifyResult(BaseModel):
+    matched: bool
+    confidence: str
+    score: float
+    quality: float
+    message: str
+    components: list[dict] = []
+    person: PersonOut | None = None
 
 
 class CaseCreate(BaseModel):

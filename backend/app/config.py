@@ -31,3 +31,10 @@ FUSION_WEIGHTS = {
 }
 
 TOP_K = 10
+
+# Minimum fused biometric score (fingerprint, optionally + face — see
+# routers/persons.py::identify_by_fingerprint) to treat a direct 1:N identify
+# lookup as a match, rather than a candidate ranking. Deliberately biometric
+# only: tattoos/belongings/geo/demographics are soft attributes used by the
+# case-investigation pipeline (cases.py), never for a direct identity check.
+IDENTIFY_MATCH_THRESHOLD = float(os.getenv("IDENTIFY_MATCH_THRESHOLD", "0.5"))

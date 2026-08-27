@@ -1,8 +1,13 @@
 import 'react-native-gesture-handler';
 import React from 'react';
 import { ActivityIndicator, StatusBar, View } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  useNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 
 import { AuthProvider, useAuth } from './src/auth';
 import { theme } from './src/theme';
@@ -12,6 +17,7 @@ import NewCaseScreen from './src/screens/NewCaseScreen';
 import CaseDetailScreen from './src/screens/CaseDetailScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import CandidateScreen from './src/screens/CandidateScreen';
+import IdentifyScreen from './src/screens/IdentifyScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -20,6 +26,7 @@ export type RootStackParamList = {
   CaseDetail: { caseId: number };
   Results: { caseId: number; runFresh?: boolean };
   Candidate: { caseId: number; candidateIndex: number };
+  Identify: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -38,6 +45,18 @@ const navTheme = {
 
 function Router() {
   const { user, loading } = useAuth();
+  const { hasShareIntent } = useShareIntentContext();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+
+  // When a fingerprint capture app shares a scan in via Android's share
+  // sheet, jump straight to the Identify screen so the officer doesn't have
+  // to go hunting for it. If nobody is signed in yet, IdentifyScreen picks up
+  // the same pending intent once it mounts after login.
+  React.useEffect(() => {
+    if (hasShareIntent && user && navigationRef.isReady()) {
+      navigationRef.navigate('Identify');
+    }
+  }, [hasShareIntent, user, navigationRef]);
 
   if (loading) {
     return (
@@ -48,7 +67,7 @@ function Router() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: theme.surface },
@@ -66,6 +85,11 @@ function Router() {
             <Stack.Screen name="CaseDetail" component={CaseDetailScreen} options={{ title: 'Case' }} />
             <Stack.Screen name="Results" component={ResultsScreen} options={{ title: 'Candidates' }} />
             <Stack.Screen name="Candidate" component={CandidateScreen} options={{ title: 'Comparison' }} />
+            <Stack.Screen
+              name="Identify"
+              component={IdentifyScreen}
+              options={{ title: 'Identify by Fingerprint' }}
+            />
           </>
         )}
       </Stack.Navigator>
@@ -75,9 +99,11 @@ function Router() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <StatusBar barStyle="light-content" backgroundColor={theme.surface} />
-      <Router />
-    </AuthProvider>
+    <ShareIntentProvider>
+      <AuthProvider>
+        <StatusBar barStyle="light-content" backgroundColor={theme.surface} />
+        <Router />
+      </AuthProvider>
+    </ShareIntentProvider>
   );
 }
