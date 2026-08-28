@@ -73,12 +73,6 @@ export default function CasesScreen() {
         </Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
-            style={styles.identifyButton}
-            onPress={() => navigation.navigate('Identify')}
-          >
-            <Text style={styles.identifyButtonText}>Identify</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={styles.newButton}
             onPress={() => navigation.navigate('NewCase')}
           >
@@ -155,15 +149,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   newButtonText: { color: '#fff', fontWeight: '700' },
-  identifyButton: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.accent,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  identifyButtonText: { color: theme.accent, fontWeight: '700' },
   card: {
     backgroundColor: theme.surface,
     borderRadius: theme.radius,

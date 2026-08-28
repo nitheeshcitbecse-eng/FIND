@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  Image,
+  Alert,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -13,27 +14,26 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 
 import type { RootStackParamList } from '../../App';
-import { api, Candidate, MatchRun, mediaUrl } from '../api';
-import { MODALITY_LABELS } from '../config';
+import { api, MatchRun } from '../api';
+import { useAuth } from '../auth';
 import { confidenceColor, theme } from '../theme';
-
-export const runCache: Record<number, MatchRun> = {};
 
 export default function ResultsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Results'>>();
   const { caseId } = route.params;
+  const { user } = useAuth();
 
   const [run, setRun] = useState<MatchRun | null>(null);
+  const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     try {
       setError('');
-      const data = await api.latestMatch(caseId);
-      runCache[caseId] = data;
-      setRun(data);
+      setRun(await api.latestMatch(caseId));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -46,6 +46,36 @@ export default function ResultsScreen() {
       load();
     }, [load])
   );
+
+  const canDecide = user?.role === 'verifier' || user?.role === 'admin';
+
+  const decide = (confirmed: boolean) => {
+    Alert.alert(
+      confirmed ? 'Confirm identification' : 'Reject this match',
+      confirmed
+        ? `Record ${run?.address} as the confirmed identification for this case? This is logged against your account.`
+        : 'Mark this case as closed / unidentified? This is logged against your account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: confirmed ? 'Confirm' : 'Reject',
+          style: confirmed ? 'default' : 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            setError('');
+            try {
+              await api.recordDecision(caseId, { confirmed, decision_note: note });
+              navigation.navigate('Cases');
+            } catch (e: any) {
+              setError(e.message);
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -63,138 +93,146 @@ export default function ResultsScreen() {
     );
   }
 
-  const topComponent = (candidate: Candidate) =>
-    [...candidate.explanation.components].sort(
-      (a, b) => b.contribution - a.contribution
-    )[0];
+  const color = confidenceColor(run.confidence);
 
   return (
-    <FlatList
-      style={styles.root}
-      contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }}
-      data={run.candidates}
-      keyExtractor={(item) => String(item.person.id)}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>
-            Top {run.candidates.length} candidates
-          </Text>
-          <Text style={styles.headerMeta}>
-            Face: {run.engine_info.face} · Retrieval: {run.engine_info.retrieval} · Gallery:{' '}
-            {run.engine_info.gallery_size} records
-          </Text>
-          <Text style={styles.headerMeta}>
-            Generated {new Date(run.created_at).toLocaleString()}
-          </Text>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+      <Text style={styles.headerMeta}>
+        Generated {new Date(run.created_at).toLocaleString()} · gallery{' '}
+        {run.engine_info.gallery_size ?? '?'} records
+      </Text>
+
+      {run.matched ? (
+        <View style={styles.card}>
+          <View style={[styles.badge, { borderColor: color }]}>
+            <Text style={[styles.badgeText, { color }]}>{run.confidence} confidence</Text>
+          </View>
+          <Text style={[styles.score, { color }]}>{(run.score * 100).toFixed(1)}%</Text>
+          <Text style={styles.addressLabel}>Registered address</Text>
+          <Text style={styles.address}>{run.address}</Text>
         </View>
-      }
-      renderItem={({ item, index }) => {
-        const top = topComponent(item);
-        const color = confidenceColor(item.confidence);
-        return (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() =>
-              navigation.navigate('Candidate', { caseId, candidateIndex: index })
-            }
-          >
-            <Text style={styles.rank}>#{item.rank}</Text>
-            <Image
-              source={{ uri: mediaUrl(item.person.face_photo_path) }}
-              style={styles.avatar}
+      ) : (
+        <View style={styles.noMatchCard}>
+          <Text style={styles.noMatchText}>No person found</Text>
+        </View>
+      )}
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {run.matched ? (
+        canDecide ? (
+          <>
+            <Text style={styles.section}>Verification decision</Text>
+            <TextInput
+              style={styles.input}
+              value={note}
+              onChangeText={setNote}
+              multiline
+              placeholder="Record the independent checks performed (family confirmation, documents…)"
+              placeholderTextColor={theme.textDim}
             />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.name}>{item.person.name}</Text>
-              <Text style={styles.meta}>
-                {item.person.record_ref} · {item.person.sex}
-                {item.person.age ? `, ${item.person.age}y` : ''}
-                {item.person.last_known_city ? ` · ${item.person.last_known_city}` : ''}
-              </Text>
+            <TouchableOpacity
+              style={[styles.confirmButton, busy && { opacity: 0.6 }]}
+              onPress={() => decide(true)}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmText}>Record confirmed identification</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.rejectButton, busy && { opacity: 0.6 }]}
+              onPress={() => decide(false)}
+              disabled={busy}
+            >
+              <Text style={styles.rejectText}>Reject match / close as unidentified</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={styles.note}>
+            Your role ({user?.role}) can capture and review evidence but cannot confirm an
+            identification. Escalate to an authorized verifier.
+          </Text>
+        )
+      ) : null}
 
-              <View style={styles.barTrack}>
-                <View
-                  style={[
-                    styles.barFill,
-                    { width: `${Math.round(item.score * 100)}%`, backgroundColor: color },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.scoreRow}>
-                <Text style={[styles.score, { color }]}>
-                  {(item.score * 100).toFixed(1)}%
-                </Text>
-                <View style={[styles.badge, { borderColor: color }]}>
-                  <Text style={[styles.badgeText, { color }]}>{item.confidence}</Text>
-                </View>
-              </View>
-
-              {top ? (
-                <Text style={styles.driver}>
-                  Strongest signal: {MODALITY_LABELS[top.modality] || top.modality} (
-                  {(top.score * 100).toFixed(0)}%)
-                </Text>
-              ) : null}
-            </View>
-          </TouchableOpacity>
-        );
-      }}
-      ListFooterComponent={
-        <Text style={styles.footer}>
-          Tap a candidate for the full evidence breakdown. A confirmed identification must be
-          recorded by an authorized verifier after independent checks.
-        </Text>
-      }
-    />
+      <Text style={styles.disclaimer}>
+        This is a machine-generated lead, not a legal identification. A confirmed
+        identification requires independent verification under applicable legal procedure.
+      </Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   center: { flex: 1, backgroundColor: theme.bg, justifyContent: 'center', padding: 24 },
-  header: { gap: 4, marginBottom: 4 },
-  headerTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
+  content: { padding: 16, paddingBottom: 48, gap: 14 },
   headerMeta: { color: theme.textDim, fontSize: 11, lineHeight: 16 },
   card: {
-    flexDirection: 'row',
-    gap: 12,
     backgroundColor: theme.surface,
     borderRadius: theme.radius,
     borderWidth: 1,
     borderColor: theme.border,
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  badge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  score: { fontSize: 36, fontWeight: '900' },
+  addressLabel: {
+    color: theme.textDim,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
+  address: { color: theme.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  noMatchCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 24,
+    alignItems: 'center',
+  },
+  noMatchText: { color: theme.textDim, fontSize: 16, fontWeight: '700' },
+  section: { color: theme.text, fontSize: 16, fontWeight: '700', marginTop: 6 },
+  input: {
+    backgroundColor: theme.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    color: theme.text,
+    padding: 14,
+    fontSize: 14,
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  confirmButton: {
+    backgroundColor: theme.high,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+  },
+  confirmText: { color: '#052e16', fontWeight: '800', fontSize: 15 },
+  rejectButton: {
+    borderWidth: 1,
+    borderColor: theme.danger,
+    borderRadius: 8,
     padding: 14,
     alignItems: 'center',
   },
-  rank: { color: theme.textDim, fontSize: 13, fontWeight: '700', width: 26 },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.surfaceAlt,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  name: { color: theme.text, fontSize: 15, fontWeight: '700' },
-  meta: { color: theme.textDim, fontSize: 11 },
-  barTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.surfaceAlt,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  barFill: { height: 6, borderRadius: 3 },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  score: { fontSize: 14, fontWeight: '800' },
-  badge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  driver: { color: theme.textDim, fontSize: 11 },
+  rejectText: { color: theme.danger, fontWeight: '700', fontSize: 14 },
+  note: { color: theme.textDim, fontSize: 12, lineHeight: 19 },
   error: { color: theme.danger, textAlign: 'center', lineHeight: 20 },
-  footer: {
+  disclaimer: {
     color: theme.textDim,
     fontSize: 11,
     lineHeight: 17,
-    marginTop: 16,
+    marginTop: 8,
     textAlign: 'center',
   },
 });

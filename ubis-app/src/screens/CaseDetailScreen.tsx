@@ -230,11 +230,11 @@ export default function CaseDetailScreen() {
         style={styles.secondaryButton}
         onPress={() => navigation.navigate('Results', { caseId })}
       >
-        <Text style={styles.secondaryButtonText}>View last candidate list</Text>
+        <Text style={styles.secondaryButtonText}>View last result</Text>
       </TouchableOpacity>
 
       <Text style={styles.disclaimer}>
-        Results are ranked leads for authorized human verification. They are not a legal
+        Results are a lead for authorized human verification. They are not a legal
         identification.
       </Text>
     </ScrollView>

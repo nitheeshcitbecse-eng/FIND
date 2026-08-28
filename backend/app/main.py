@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import MEDIA_DIR
 from .database import init_db
+from .govern_database import init_govern_db
 from .routers import auth, cases, persons
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -40,17 +41,17 @@ app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 @app.on_event("startup")
 def startup() -> None:
     init_db()
+    init_govern_db()
 
 
 @app.get("/health")
 def health():
-    from .ai import face, index, objects
+    from .ai import face, objects
 
     return {
         "status": "ok",
         "engines": {
             "face": face.engine_name(),
             "objects": objects.engine_name(),
-            "retrieval": index.engine_name(),
         },
     }

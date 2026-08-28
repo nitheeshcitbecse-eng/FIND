@@ -16,33 +16,13 @@ class UserOut(BaseModel):
     role: str
 
 
-class PersonBrief(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    record_ref: str
-    name: str
-    sex: str
-    age: int | None
-    last_known_city: str
-    address: str
-    face_photo_path: str | None
-
-
-class PersonOut(PersonBrief):
-    tattoo_description: str
-    known_belongings: str
-    notes: str
-    fingerprint_path: str | None
-
-
 class FingerprintIdentifyResult(BaseModel):
     matched: bool
     confidence: str
     score: float
     quality: float
     message: str
-    components: list[dict] = []
-    person: PersonOut | None = None
+    address: str | None = None
 
 
 class CaseCreate(BaseModel):
@@ -96,28 +76,24 @@ class CaseOut(CaseBrief):
     estimated_age_max: int | None
     tattoo_description: str
     notes: str
-    identified_person_id: int | None
+    identified_gov_person_id: int | None
+    identified_address: str | None
     decision_note: str
     evidence: list[EvidenceOut] = []
-
-
-class CandidateOut(BaseModel):
-    rank: int
-    score: float
-    confidence: str
-    person: PersonBrief
-    explanation: dict
 
 
 class MatchRunOut(BaseModel):
     run_id: int
     case_id: int
     created_at: datetime
+    matched: bool
+    address: str | None
+    score: float
+    confidence: str
+    message: str
     engine_info: dict
-    candidates: list[CandidateOut]
 
 
 class DecisionIn(BaseModel):
-    person_id: int | None = None
+    confirmed: bool
     decision_note: str = ""
-    close_unidentified: bool = False

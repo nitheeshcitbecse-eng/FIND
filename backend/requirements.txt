@@ -10,7 +10,7 @@ numpy==2.4.6
 opencv-contrib-python-headless==4.10.0.84
 Pillow==11.1.0
 psycopg2-binary==2.9.10
-faiss-cpu==1.15.0
+httpx==0.28.1
 onnxruntime==1.29.0
 insightface==1.0.1
 ultralytics==8.4.130

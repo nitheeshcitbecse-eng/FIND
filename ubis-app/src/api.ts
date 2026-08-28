@@ -5,40 +5,13 @@ const TOKEN_KEY = 'ubis.token';
 
 export type User = { id: number; username: string; full_name: string; role: string };
 
-export type PersonBrief = {
-  id: number;
-  record_ref: string;
-  name: string;
-  sex: string;
-  age: number | null;
-  last_known_city: string;
-  address: string;
-  face_photo_path: string | null;
-};
-
-export type Person = PersonBrief & {
-  tattoo_description: string;
-  known_belongings: string;
-  notes: string;
-  fingerprint_path: string | null;
-};
-
-export type IdentifyComponent = {
-  modality: string;
-  score: number;
-  weight: number;
-  contribution: number;
-  detail: string;
-};
-
 export type FingerprintIdentifyResult = {
   matched: boolean;
   confidence: string;
   score: number;
   quality: number;
   message: string;
-  components: IdentifyComponent[];
-  person: Person | null;
+  address: string | null;
 };
 
 export type Evidence = {
@@ -67,38 +40,22 @@ export type CaseDetail = CaseBrief & {
   estimated_age_max: number | null;
   tattoo_description: string;
   notes: string;
-  identified_person_id: number | null;
+  identified_gov_person_id: number | null;
+  identified_address: string | null;
   decision_note: string;
   evidence: Evidence[];
-};
-
-export type Component = {
-  modality: string;
-  score: number;
-  weight: number;
-  contribution: number;
-  detail: string;
-};
-
-export type Candidate = {
-  rank: number;
-  score: number;
-  confidence: string;
-  person: PersonBrief;
-  explanation: {
-    components: Component[];
-    coverage: number;
-    margin_over_next: number | null;
-    notes: string[];
-  };
 };
 
 export type MatchRun = {
   run_id: number;
   case_id: number;
   created_at: string;
+  matched: boolean;
+  address: string | null;
+  score: number;
+  confidence: string;
+  message: string;
   engine_info: Record<string, any>;
-  candidates: Candidate[];
 };
 
 export async function setToken(token: string | null) {
@@ -112,6 +69,9 @@ export async function getToken(): Promise<string | null> {
 
 export function mediaUrl(path: string | null | undefined): string | undefined {
   if (!path) return undefined;
+  // Already an absolute URL (Supabase Storage in production) — use as-is.
+  if (/^https?:\/\//.test(path)) return path;
+  // Relative path (local dev backend serving MEDIA_DIR via /media).
   return `${API_BASE}/media/${path}`;
 }
 
@@ -210,8 +170,6 @@ export const api = {
   runMatch: (caseId: number) => request<MatchRun>(`/cases/${caseId}/match`, { method: 'POST' }),
 
   latestMatch: (caseId: number) => request<MatchRun>(`/cases/${caseId}/matches/latest`),
-
-  getPerson: (id: number) => request<Person>(`/persons/${id}`),
 
   identifyFingerprint: async (
     fingerprintUri: string,

@@ -31,38 +31,6 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class ReferencePerson(Base):
-    """A record in the authorized identity database.
-
-    In production this table is NOT yours — it is queried through an official
-    government API. Here it stands in for that database so the pipeline is
-    testable end to end.
-    """
-
-    __tablename__ = "reference_persons"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    record_ref: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    name: Mapped[str] = mapped_column(String(128))
-    sex: Mapped[str] = mapped_column(String(16), default="unknown")
-    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    last_known_city: Mapped[str] = mapped_column(String(128), default="")
-    last_known_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
-    last_known_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
-    address: Mapped[str] = mapped_column(Text, default="")
-    tattoo_description: Mapped[str] = mapped_column(Text, default="")
-    known_belongings: Mapped[str] = mapped_column(Text, default="")
-    notes: Mapped[str] = mapped_column(Text, default="")
-
-    face_photo_path: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    fingerprint_path: Mapped[str | None] = mapped_column(String(256), nullable=True)
-
-    face_embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    fingerprint_template: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
 class Case(Base):
     __tablename__ = "cases"
 
@@ -82,9 +50,10 @@ class Case(Base):
     tattoo_description: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
 
-    identified_person_id: Mapped[int | None] = mapped_column(
-        ForeignKey("reference_persons.id"), nullable=True
-    )
+    # References govern_db.GovPerson.id — a separate database/engine, so this
+    # is a plain unenforced integer, never a real ForeignKey.
+    identified_gov_person_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    identified_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     decision_note: Mapped[str] = mapped_column(Text, default="")
     decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -114,31 +83,33 @@ class Evidence(Base):
 
 
 class MatchRun(Base):
+    """One "Run identification" outcome: a single fingerprint+face comparison
+    of a case's evidence against govern_db, resolving to matched/not-matched.
+
+    There is no per-candidate ranking anymore — govern_db.GovPerson is
+    compared exhaustively and only the single best-scoring record (if any,
+    above IDENTIFY_MATCH_THRESHOLD) is kept.
+    """
+
     __tablename__ = "match_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    matched: Mapped[bool] = mapped_column(default=False)
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence: Mapped[str] = mapped_column(String(16), default="low")
+
+    # References govern_db.GovPerson.id — a separate database/engine, so this
+    # is a plain unenforced integer, never a real ForeignKey.
+    gov_person_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Denormalized copy of GovPerson.address captured at match time, so
+    # displaying/auditing a past result never needs a second govern_db query.
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     engine_info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-    candidates: Mapped[list["Candidate"]] = relationship(
-        back_populates="run", cascade="all, delete-orphan", order_by="Candidate.rank"
-    )
-
-
-class Candidate(Base):
-    __tablename__ = "candidates"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    match_run_id: Mapped[int] = mapped_column(ForeignKey("match_runs.id"))
-    person_id: Mapped[int] = mapped_column(ForeignKey("reference_persons.id"))
-    rank: Mapped[int] = mapped_column(Integer)
-    score: Mapped[float] = mapped_column(Float)
-    confidence: Mapped[str] = mapped_column(String(16), default="low")
-    explanation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    run: Mapped[MatchRun] = relationship(back_populates="candidates")
 
 
 class AuditLog(Base):

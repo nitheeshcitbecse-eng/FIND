@@ -1,0 +1,3 @@
+aadhaar=123456789012
+name=Ravi Kumar
+address=12 Anna Nagar, Chennai, Tamil Nadu 600040

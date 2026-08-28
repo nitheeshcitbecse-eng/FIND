@@ -1,11 +1,11 @@
 /**
- * IMPORTANT: set API_BASE to your computer's LAN IP address.
+ * Once the backend is deployed to Render, replace this with its public
+ * HTTPS URL, e.g. 'https://ubis-backend.onrender.com' — then the app works
+ * over any network, not just this Wi-Fi.
  *
- * "localhost" means the phone itself, so it will never find your laptop.
- * Find your IP on Ubuntu with:   hostname -I
- * Then use e.g. http://192.168.1.42:8000
- *
- * Your phone and laptop must be on the same Wi-Fi network.
+ * Local-dev fallback: "localhost" means the phone itself, so it will never
+ * find your laptop — use your computer's LAN IP instead (phone and laptop
+ * must be on the same Wi-Fi network).
  */
 export const API_BASE = 'http://192.168.31.167:8000';
 
@@ -17,11 +17,3 @@ export const EVIDENCE_KINDS = [
   { key: 'other', label: 'Other evidence', hint: 'Anything else relevant' },
 ] as const;
 
-export const MODALITY_LABELS: Record<string, string> = {
-  fingerprint: 'Fingerprint',
-  face: 'Face',
-  tattoo: 'Tattoos / scars',
-  belongings: 'Belongings',
-  geo: 'Location',
-  demographics: 'Demographics',
-};

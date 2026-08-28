@@ -14,11 +14,6 @@ import { useShareIntentContext } from 'expo-share-intent';
 import { api, FingerprintIdentifyResult } from '../api';
 import { confidenceColor, theme } from '../theme';
 
-const MODALITY_LABELS: Record<string, string> = {
-  fingerprint: 'Fingerprint',
-  face: 'Face photo',
-};
-
 export default function IdentifyScreen() {
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
 
@@ -93,8 +88,6 @@ export default function IdentifyScreen() {
     identify(imageUri, uri);
   };
 
-  const person = result?.person;
-
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <Text style={styles.hint}>
@@ -151,46 +144,15 @@ export default function IdentifyScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {result && !busy ? (
-        result.matched && person ? (
+        result.matched ? (
           <View style={styles.resultCard}>
             <View style={[styles.badge, { borderColor: confidenceColor(result.confidence) }]}>
               <Text style={[styles.badgeText, { color: confidenceColor(result.confidence) }]}>
                 {result.confidence} confidence · {(result.score * 100).toFixed(1)}%
               </Text>
             </View>
-            <Text style={styles.name}>{person.name}</Text>
-            <Text style={styles.meta}>{person.record_ref}</Text>
-
-            <View style={styles.row}>
-              <Text style={styles.label}>Address</Text>
-              <Text style={styles.value}>{person.address || 'Not on record'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Last known city</Text>
-              <Text style={styles.value}>{person.last_known_city || 'Unknown'}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Sex / Age</Text>
-              <Text style={styles.value}>
-                {person.sex} · {person.age ?? 'unknown'}
-              </Text>
-            </View>
-            {person.notes ? (
-              <View style={styles.row}>
-                <Text style={styles.label}>Notes</Text>
-                <Text style={styles.value}>{person.notes}</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.breakdownTitle}>Match breakdown</Text>
-            {result.components.map((c) => (
-              <View key={c.modality} style={styles.componentRow}>
-                <Text style={styles.componentName}>
-                  {MODALITY_LABELS[c.modality] || c.modality}
-                </Text>
-                <Text style={styles.componentScore}>{(c.score * 100).toFixed(0)}%</Text>
-              </View>
-            ))}
+            <Text style={styles.addressLabel}>Registered address</Text>
+            <Text style={styles.address}>{result.address}</Text>
           </View>
         ) : (
           <View style={styles.noMatchCard}>
@@ -246,20 +208,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  name: { color: theme.text, fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  meta: { color: theme.textDim, fontSize: 12, textAlign: 'center', marginBottom: 4 },
-  row: { gap: 2 },
-  label: { color: theme.textDim, fontSize: 11, textTransform: 'uppercase' },
-  value: { color: theme.text, fontSize: 15, lineHeight: 20 },
-  breakdownTitle: {
+  addressLabel: {
     color: theme.textDim,
     fontSize: 11,
     textTransform: 'uppercase',
-    marginTop: 6,
+    textAlign: 'center',
   },
-  componentRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  componentName: { color: theme.text, fontSize: 13 },
-  componentScore: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  address: { color: theme.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
   noMatchCard: {
     backgroundColor: theme.surface,
     borderRadius: theme.radius,

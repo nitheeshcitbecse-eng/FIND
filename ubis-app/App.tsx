@@ -16,7 +16,6 @@ import CasesScreen from './src/screens/CasesScreen';
 import NewCaseScreen from './src/screens/NewCaseScreen';
 import CaseDetailScreen from './src/screens/CaseDetailScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
-import CandidateScreen from './src/screens/CandidateScreen';
 import IdentifyScreen from './src/screens/IdentifyScreen';
 
 export type RootStackParamList = {
@@ -25,7 +24,6 @@ export type RootStackParamList = {
   NewCase: undefined;
   CaseDetail: { caseId: number };
   Results: { caseId: number; runFresh?: boolean };
-  Candidate: { caseId: number; candidateIndex: number };
   Identify: undefined;
 };
 
@@ -83,8 +81,7 @@ function Router() {
             <Stack.Screen name="Cases" component={CasesScreen} options={{ title: 'Cases' }} />
             <Stack.Screen name="NewCase" component={NewCaseScreen} options={{ title: 'New Case' }} />
             <Stack.Screen name="CaseDetail" component={CaseDetailScreen} options={{ title: 'Case' }} />
-            <Stack.Screen name="Results" component={ResultsScreen} options={{ title: 'Candidates' }} />
-            <Stack.Screen name="Candidate" component={CandidateScreen} options={{ title: 'Comparison' }} />
+            <Stack.Screen name="Results" component={ResultsScreen} options={{ title: 'Identification' }} />
             <Stack.Screen
               name="Identify"
               component={IdentifyScreen}

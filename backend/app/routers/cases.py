@@ -6,14 +6,14 @@ from sqlalchemy.orm import Session
 from ..ai import face as face_ai
 from ..ai import fingerprint as fp_ai
 from ..ai import fusion
-from ..ai import index as vindex
 from ..ai import objects as obj_ai
-from ..config import TOP_K
+from ..config import IDENTIFY_MATCH_THRESHOLD
 from ..database import get_db
 from ..deps import audit, get_current_user, require_roles
-from ..models import Candidate, Case, Evidence, MatchRun, ReferencePerson, User
+from ..govern_database import get_govern_db
+from ..govern_models import GovPerson
+from ..models import Case, Evidence, MatchRun, User
 from ..schemas import (
-    CandidateOut,
     CaseBrief,
     CaseCreate,
     CaseOut,
@@ -22,7 +22,7 @@ from ..schemas import (
     EvidenceOut,
     MatchRunOut,
 )
-from ..storage import abs_path, save_upload
+from ..storage import save_upload
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -126,31 +126,29 @@ def upload_evidence(
     if kind not in VALID_KINDS:
         raise HTTPException(400, f"kind must be one of {sorted(VALID_KINDS)}")
 
-    rel = save_upload(file, f"cases/{case.case_number}/{kind}")
-    path = str(abs_path(rel))
-
     quality: float | None = None
     extracted: dict = {}
 
-    try:
-        if kind == "face":
-            result = face_ai.embed_face(path)
-            quality = result["quality"]
-            extracted = {
-                "engine": result["engine"],
-                "bbox": result["bbox"],
-                "faces_found": result["faces_found"],
-                "embedding": result["embedding"],
-            }
-        elif kind == "fingerprint":
-            template = fp_ai.extract_template(path)
-            quality = template["quality"]
-            extracted = {"engine": "opencv-orb", "template": template}
-        else:
-            detected = obj_ai.detect_objects(path)
-            extracted = detected
-    except Exception as exc:  # noqa: BLE001
-        extracted = {"error": str(exc)}
+    with save_upload(file, f"cases/{case.case_number}/{kind}") as (rel, path):
+        try:
+            if kind == "face":
+                result = face_ai.embed_face(path)
+                quality = result["quality"]
+                extracted = {
+                    "engine": result["engine"],
+                    "bbox": result["bbox"],
+                    "faces_found": result["faces_found"],
+                    "embedding": result["embedding"],
+                }
+            elif kind == "fingerprint":
+                template = fp_ai.extract_template(path)
+                quality = template["quality"]
+                extracted = {"engine": "opencv-orb", "template": template}
+            else:
+                detected = obj_ai.detect_objects(path)
+                extracted = detected
+        except Exception as exc:  # noqa: BLE001
+            extracted = {"error": str(exc)}
 
     evidence = Evidence(
         case_id=case.id,
@@ -210,36 +208,22 @@ def _best_fingerprint(case: Case) -> tuple[dict | None, float]:
     return best, best_q
 
 
-def _detected_labels(case: Case) -> list[str]:
-    labels: set[str] = set()
-    for ev in case.evidence:
-        if ev.kind in {"belonging", "other", "tattoo"} and ev.extracted:
-            for label in ev.extracted.get("labels", []) or []:
-                labels.add(label)
-    return sorted(labels)
-
-
-def _serialize_run(db: Session, run: MatchRun) -> MatchRunOut:
-    candidates = []
-    for cand in run.candidates:
-        person = db.get(ReferencePerson, cand.person_id)
-        if not person:
-            continue
-        candidates.append(
-            CandidateOut(
-                rank=cand.rank,
-                score=cand.score,
-                confidence=cand.confidence,
-                person=person,
-                explanation=cand.explanation or {},
-            )
-        )
+def _serialize_run(run: MatchRun) -> MatchRunOut:
+    message = (
+        f"Match found in the government database (score {run.score:.2f})."
+        if run.matched
+        else "No person found."
+    )
     return MatchRunOut(
         run_id=run.id,
         case_id=run.case_id,
         created_at=run.created_at,
+        matched=run.matched,
+        address=run.address,
+        score=run.score,
+        confidence=run.confidence,
+        message=message,
         engine_info=run.engine_info or {},
-        candidates=candidates,
     )
 
 
@@ -247,43 +231,37 @@ def _serialize_run(db: Session, run: MatchRun) -> MatchRunOut:
 def run_match(
     case_id: int,
     db: Session = Depends(get_db),
+    govdb: Session = Depends(get_govern_db),
     user: User = Depends(require_roles("officer", "verifier", "admin")),
 ):
-    """Run the identification pipeline and return an explainable Top-K ranking.
+    """Compare the case's fingerprint and/or face evidence against govern_db
+    and record a single matched/not-matched verdict.
 
-    Synchronous for the prototype. For production, move the body into a Celery
-    task and return a job id the app polls.
+    Synchronous for the prototype. For production, move the body into a
+    Celery task and return a job id the app polls.
     """
     case = _get_case(db, case_id)
-    if not case.evidence:
-        raise HTTPException(400, "Add at least one piece of evidence before matching")
-
-    face_emb, face_q, face_engine = _best_face_embedding(case)
     fp_template, fp_q = _best_fingerprint(case)
-    labels = _detected_labels(case)
+    face_emb, face_q, face_engine = _best_face_embedding(case)
 
-    # --- Candidate retrieval -------------------------------------------------
-    # Face search narrows the gallery; without a face we fall back to a broader
-    # scan (bounded, since 1:N fingerprint matching is expensive).
-    shortlist: dict[int, float] = {}
-    if face_emb:
-        for pid, sim in vindex.search(db, face_emb, top_k=200):
-            shortlist[pid] = sim
+    if not fp_template and not face_emb:
+        raise HTTPException(
+            400, "Add a fingerprint or face photo before running identification"
+        )
 
-    if not shortlist:
-        rows = db.query(ReferencePerson.id).order_by(ReferencePerson.id).limit(500).all()
-        shortlist = {row[0] for row in rows}
-        shortlist = {pid: 0.0 for pid in shortlist}
-
-    persons = (
-        db.query(ReferencePerson)
-        .filter(ReferencePerson.id.in_(list(shortlist.keys())))
+    gallery = (
+        govdb.query(GovPerson)
+        .filter(
+            GovPerson.fingerprint_template.isnot(None)
+            | GovPerson.face_embedding.isnot(None)
+        )
         .all()
     )
 
-    # --- Per-candidate scoring ----------------------------------------------
-    scored = []
-    for person in persons:
+    best_person: GovPerson | None = None
+    best_score = 0.0
+
+    for person in gallery:
         signals: dict[str, dict] = {}
 
         if fp_template and person.fingerprint_template:
@@ -294,115 +272,51 @@ def run_match(
             }
 
         if face_emb and person.face_embedding:
-            sim = shortlist.get(person.id)
-            if sim is None or sim == 0.0:
-                sim = face_ai.cosine(face_emb, person.face_embedding)
+            sim = face_ai.cosine(face_emb, person.face_embedding)
             sim01 = max(0.0, (sim + 1.0) / 2.0) if sim < 0 else sim
             signals["face"] = {
                 "score": sim01,
                 "detail": f"cosine {sim:.3f} via {face_engine or 'face engine'} (photo quality {face_q:.2f})",
             }
 
-        if case.tattoo_description and person.tattoo_description:
-            sim = fusion.text_similarity(case.tattoo_description, person.tattoo_description)
-            signals["tattoo"] = {
-                "score": sim,
-                "detail": f"case marks '{case.tattoo_description[:60]}' vs record '{person.tattoo_description[:60]}'",
-            }
-
-        if labels and person.known_belongings:
-            sim = fusion.label_similarity(labels, person.known_belongings)
-            signals["belongings"] = {
-                "score": sim,
-                "detail": f"detected {', '.join(labels[:5])}",
-            }
-
-        geo_score, dist = fusion.geo_similarity(
-            case.found_lat, case.found_lng, person.last_known_lat, person.last_known_lng
-        )
-        if dist is not None:
-            signals["geo"] = {
-                "score": geo_score,
-                "detail": f"{dist:.0f} km from last known location ({person.last_known_city or 'unknown'})",
-            }
-
-        demo_score, demo_detail = fusion.demographic_similarity(
-            case.estimated_sex,
-            case.estimated_age_min,
-            case.estimated_age_max,
-            person.sex,
-            person.age,
-        )
-        if demo_detail != "no demographic data":
-            signals["demographics"] = {"score": demo_score, "detail": demo_detail}
-
         if not signals:
             continue
 
         result = fusion.fuse(signals)
-        scored.append((person, result, signals))
+        if result["score"] > best_score:
+            best_score = result["score"]
+            best_person = person
 
-    if not scored:
-        raise HTTPException(
-            422,
-            "No comparable records found. Check that reference records have "
-            "face/fingerprint data enrolled (run seed.py).",
-        )
-
-    scored.sort(key=lambda item: item[1]["score"], reverse=True)
-    top = scored[:TOP_K]
-    runner_up = scored[1][1]["score"] if len(scored) > 1 else 0.0
+    matched = best_person is not None and best_score >= IDENTIFY_MATCH_THRESHOLD
+    confidence = fusion.simple_confidence_band(best_score, IDENTIFY_MATCH_THRESHOLD)
 
     run = MatchRun(
         case_id=case.id,
         created_by_id=user.id,
+        matched=matched,
+        score=round(best_score, 4),
+        confidence=confidence if matched else "low",
+        gov_person_id=best_person.id if matched and best_person else None,
+        address=best_person.address if matched and best_person else None,
         engine_info={
-            "face": face_ai.engine_name(),
             "fingerprint": "opencv-gabor-orb",
-            "objects": obj_ai.engine_name(),
-            "retrieval": vindex.engine_name(),
+            "face": face_ai.engine_name(),
             "fusion": "weighted-linear-v1",
-            "gallery_size": len(persons),
+            "gallery_size": len(gallery),
         },
     )
     db.add(run)
-    db.flush()
 
-    for rank, (person, result, signals) in enumerate(top, start=1):
-        margin = result["score"] - (runner_up if rank == 1 else 0.0)
-        has_biometric = "fingerprint" in signals or "face" in signals
-        band = fusion.confidence_band(
-            result["score"], max(margin, 0.0), result["coverage"], has_biometric
-        )
-        explanation = {
-            "components": result["components"],
-            "coverage": result["coverage"],
-            "margin_over_next": round(max(margin, 0.0), 4) if rank == 1 else None,
-            "notes": fusion.build_notes(
-                signals, result["coverage"], band, result["components"]
-            ),
-        }
-        db.add(
-            Candidate(
-                match_run_id=run.id,
-                person_id=person.id,
-                rank=rank,
-                score=result["score"],
-                confidence=band,
-                explanation=explanation,
-            )
-        )
-
-    if case.status == "open":
+    if matched and case.status == "open":
         case.status = "matched"
     db.commit()
     db.refresh(run)
 
     audit(
         db, user, "run_match", "case", case_id,
-        {"run_id": run.id, "top_score": top[0][1]["score"], "gallery": len(persons)},
+        {"run_id": run.id, "matched": matched, "score": run.score, "gallery": len(gallery)},
     )
-    return _serialize_run(db, run)
+    return _serialize_run(run)
 
 
 @router.get("/{case_id}/matches/latest", response_model=MatchRunOut)
@@ -418,7 +332,7 @@ def latest_match(
     )
     if not run:
         raise HTTPException(404, "No match run for this case yet")
-    return _serialize_run(db, run)
+    return _serialize_run(run)
 
 
 @router.post("/{case_id}/decision", response_model=CaseOut)
@@ -428,19 +342,30 @@ def record_decision(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles("verifier", "admin")),
 ):
-    """Record the human identification decision. Verifier/admin only."""
+    """Record the human verifier's decision on the case's latest match.
+
+    There is exactly one candidate to accept or reject — the single verdict
+    from the most recent run_match — never a list to choose from.
+    """
     case = _get_case(db, case_id)
 
-    if payload.close_unidentified:
-        case.status = "closed_unidentified"
-        case.identified_person_id = None
-    else:
-        if payload.person_id is None:
-            raise HTTPException(400, "person_id is required to confirm an identification")
-        if not db.get(ReferencePerson, payload.person_id):
-            raise HTTPException(404, "Reference person not found")
-        case.identified_person_id = payload.person_id
+    run = (
+        db.query(MatchRun)
+        .filter(MatchRun.case_id == case_id)
+        .order_by(MatchRun.id.desc())
+        .first()
+    )
+    if not run or not run.matched:
+        raise HTTPException(400, "No match to confirm for this case")
+
+    if payload.confirmed:
         case.status = "identified"
+        case.identified_gov_person_id = run.gov_person_id
+        case.identified_address = run.address
+    else:
+        case.status = "closed_unidentified"
+        case.identified_gov_person_id = None
+        case.identified_address = None
 
     case.decision_note = payload.decision_note
     case.decided_by_id = user.id
@@ -452,7 +377,7 @@ def record_decision(
         db, user, "record_decision", "case", case_id,
         {
             "status": case.status,
-            "person_id": case.identified_person_id,
+            "confirmed": payload.confirmed,
             "note": payload.decision_note,
         },
     )
