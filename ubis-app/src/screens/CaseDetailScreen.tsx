@@ -17,7 +17,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../App';
 import { api, CaseDetail, Evidence, mediaUrl } from '../api';
 import { EVIDENCE_KINDS } from '../config';
-import { theme } from '../theme';
+import { softShadow, theme } from '../theme';
 
 export default function CaseDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -250,11 +250,12 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 16,
+    padding: 18,
     gap: 6,
     marginBottom: 20,
+    ...softShadow,
   },
-  summaryTitle: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  summaryTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
   summaryLine: { color: theme.textDim, fontSize: 13, lineHeight: 19 },
   group: {
     backgroundColor: theme.surface,
@@ -263,14 +264,16 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     padding: 14,
     marginBottom: 12,
+    ...softShadow,
   },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   groupTitle: { color: theme.text, fontSize: 15, fontWeight: '600' },
   groupHint: { color: theme.textDim, fontSize: 11, marginTop: 2 },
   addButton: {
+    backgroundColor: theme.accentSoft,
     borderWidth: 1,
-    borderColor: theme.accent,
-    borderRadius: 8,
+    borderColor: theme.accentBorder,
+    borderRadius: theme.radiusSm,
     paddingHorizontal: 14,
     paddingVertical: 8,
     minWidth: 64,
@@ -282,7 +285,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 84,
     height: 84,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     backgroundColor: theme.surfaceAlt,
     borderWidth: 1,
     borderColor: theme.border,
@@ -291,9 +294,14 @@ const styles = StyleSheet.create({
   hintSmall: { color: theme.textDim, fontSize: 11, marginBottom: 20 },
   primaryButton: {
     backgroundColor: theme.accent,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     padding: 16,
     alignItems: 'center',
+    shadowColor: theme.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    elevation: 4,
   },
   primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   secondaryButton: { padding: 14, alignItems: 'center' },

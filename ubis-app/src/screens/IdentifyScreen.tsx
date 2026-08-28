@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useShareIntentContext } from 'expo-share-intent';
 
 import { api, FingerprintIdentifyResult } from '../api';
-import { confidenceColor, theme } from '../theme';
+import { cardShadow, confidenceColor, softColor, softShadow, theme } from '../theme';
 
 export default function IdentifyScreen() {
   const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
@@ -146,13 +146,15 @@ export default function IdentifyScreen() {
       {result && !busy ? (
         result.matched ? (
           <View style={styles.resultCard}>
-            <View style={[styles.badge, { borderColor: confidenceColor(result.confidence) }]}>
+            <View style={[styles.badge, { backgroundColor: softColor(result.confidence) }]}>
               <Text style={[styles.badgeText, { color: confidenceColor(result.confidence) }]}>
                 {result.confidence} confidence · {(result.score * 100).toFixed(1)}%
               </Text>
             </View>
-            <Text style={styles.addressLabel}>Registered address</Text>
-            <Text style={styles.address}>{result.address}</Text>
+            <View style={styles.addressBox}>
+              <Text style={styles.addressLabel}>Registered address</Text>
+              <Text style={styles.address}>{result.address}</Text>
+            </View>
           </View>
         ) : (
           <View style={styles.noMatchCard}>
@@ -176,18 +178,27 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surfaceAlt,
     borderWidth: 1,
     borderColor: theme.border,
+    overflow: 'hidden',
   },
   previewEmpty: { alignItems: 'center', justifyContent: 'center' },
   previewEmptyText: { color: theme.textDim, fontSize: 13 },
   previewRow: { flexDirection: 'row', gap: 12 },
-  previewLabel: { color: theme.textDim, fontSize: 11, marginBottom: 6, textTransform: 'uppercase' },
+  previewLabel: {
+    color: theme.textDim,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
   pickButton: {
     backgroundColor: theme.surface,
     borderWidth: 1,
     borderColor: theme.border,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     padding: 14,
     alignItems: 'center',
+    ...softShadow,
   },
   pickButtonText: { color: theme.accent, fontWeight: '700' },
   sourceTag: { color: theme.textDim, fontSize: 11, textAlign: 'center' },
@@ -197,22 +208,35 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 20,
+    padding: 22,
     gap: 10,
+    alignItems: 'center',
+    ...cardShadow,
   },
   badge: {
     alignSelf: 'center',
-    borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  addressBox: {
+    width: '100%',
+    marginTop: 4,
+    padding: 14,
+    borderRadius: theme.radiusSm,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1,
+    borderColor: theme.borderSoft,
+    alignItems: 'center',
+  },
   addressLabel: {
     color: theme.textDim,
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    textAlign: 'center',
+    marginBottom: 4,
   },
   address: { color: theme.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
   noMatchCard: {
@@ -222,6 +246,7 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     padding: 20,
     alignItems: 'center',
+    ...softShadow,
   },
   noMatchText: { color: theme.textDim, fontSize: 14, textAlign: 'center' },
 });

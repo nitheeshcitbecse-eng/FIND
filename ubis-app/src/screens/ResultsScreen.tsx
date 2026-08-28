@@ -16,7 +16,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../App';
 import { api, MatchRun } from '../api';
 import { useAuth } from '../auth';
-import { confidenceColor, theme } from '../theme';
+import { cardShadow, confidenceColor, softColor, softShadow, theme } from '../theme';
 
 export default function ResultsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -104,15 +104,20 @@ export default function ResultsScreen() {
 
       {run.matched ? (
         <View style={styles.card}>
-          <View style={[styles.badge, { borderColor: color }]}>
+          <View style={[styles.badge, { backgroundColor: softColor(run.confidence) }]}>
             <Text style={[styles.badgeText, { color }]}>{run.confidence} confidence</Text>
           </View>
           <Text style={[styles.score, { color }]}>{(run.score * 100).toFixed(1)}%</Text>
-          <Text style={styles.addressLabel}>Registered address</Text>
-          <Text style={styles.address}>{run.address}</Text>
+          <View style={styles.addressBox}>
+            <Text style={styles.addressLabel}>Registered address</Text>
+            <Text style={styles.address}>{run.address}</Text>
+          </View>
         </View>
       ) : (
         <View style={styles.noMatchCard}>
+          <View style={styles.noMatchIcon}>
+            <Text style={styles.noMatchIconText}>?</Text>
+          </View>
           <Text style={styles.noMatchText}>No person found</Text>
         </View>
       )}
@@ -176,18 +181,31 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 20,
+    padding: 24,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    ...cardShadow,
   },
-  badge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  badge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  score: { fontSize: 36, fontWeight: '900' },
+  score: { fontSize: 40, fontWeight: '900' },
+  addressBox: {
+    width: '100%',
+    marginTop: 4,
+    padding: 14,
+    borderRadius: theme.radiusSm,
+    backgroundColor: theme.surfaceRaised,
+    borderWidth: 1,
+    borderColor: theme.borderSoft,
+    alignItems: 'center',
+  },
   addressLabel: {
     color: theme.textDim,
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    marginTop: 6,
+    marginBottom: 4,
   },
   address: { color: theme.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
   noMatchCard: {
@@ -195,14 +213,33 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius,
     borderWidth: 1,
     borderColor: theme.border,
-    padding: 24,
+    padding: 28,
     alignItems: 'center',
+    gap: 12,
+    ...softShadow,
   },
+  noMatchIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.lowSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noMatchIconText: { color: theme.low, fontSize: 22, fontWeight: '800' },
   noMatchText: { color: theme.textDim, fontSize: 16, fontWeight: '700' },
-  section: { color: theme.text, fontSize: 16, fontWeight: '700', marginTop: 6 },
+  section: {
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+  },
   input: {
     backgroundColor: theme.surface,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     borderWidth: 1,
     borderColor: theme.border,
     color: theme.text,
@@ -213,15 +250,21 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     backgroundColor: theme.high,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     padding: 16,
     alignItems: 'center',
+    shadowColor: theme.high,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
   },
   confirmText: { color: '#052e16', fontWeight: '800', fontSize: 15 },
   rejectButton: {
+    backgroundColor: theme.dangerSoft,
     borderWidth: 1,
     borderColor: theme.danger,
-    borderRadius: 8,
+    borderRadius: theme.radiusSm,
     padding: 14,
     alignItems: 'center',
   },
