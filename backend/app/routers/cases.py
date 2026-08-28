@@ -100,7 +100,7 @@ def update_case(
     user: User = Depends(require_roles("officer", "verifier", "admin")),
 ):
     case = _get_case(db, case_id)
-    if case.status == "identified":
+    if case.status == "completed":
         raise HTTPException(409, "Case already has a confirmed identification")
 
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -159,6 +159,10 @@ def upload_evidence(
         extracted=extracted,
     )
     db.add(evidence)
+
+    if case.status == "pending":
+        case.status = "under_investigation"
+
     db.commit()
     db.refresh(evidence)
 
@@ -219,7 +223,9 @@ def _serialize_run(run: MatchRun) -> MatchRunOut:
         case_id=run.case_id,
         created_at=run.created_at,
         matched=run.matched,
+        name=run.gov_person_name,
         address=run.address,
+        photo_url=run.gov_person_photo_url,
         score=run.score,
         confidence=run.confidence,
         message=message,
@@ -227,28 +233,20 @@ def _serialize_run(run: MatchRun) -> MatchRunOut:
     )
 
 
-@router.post("/{case_id}/match", response_model=MatchRunOut)
-def run_match(
-    case_id: int,
-    db: Session = Depends(get_db),
-    govdb: Session = Depends(get_govern_db),
-    user: User = Depends(require_roles("officer", "verifier", "admin")),
-):
-    """Compare the case's fingerprint and/or face evidence against govern_db
-    and record a single matched/not-matched verdict.
-
-    Synchronous for the prototype. For production, move the body into a
-    Celery task and return a job id the app polls.
+def _find_best_match(
+    govdb: Session,
+    fp_template: dict | None,
+    fp_q: float,
+    face_emb: list[float] | None,
+    face_q: float,
+    face_engine: str,
+) -> tuple[GovPerson | None, float, int]:
+    """Exhaustively compare a probe (fingerprint and/or face) against every
+    govern_db record, returning the single best-scoring one. Shared by
+    run_match (fingerprint+face combined) and match_fingerprint (fingerprint
+    only, by simply passing face_emb=None) so the comparison logic lives in
+    one place.
     """
-    case = _get_case(db, case_id)
-    fp_template, fp_q = _best_fingerprint(case)
-    face_emb, face_q, face_engine = _best_face_embedding(case)
-
-    if not fp_template and not face_emb:
-        raise HTTPException(
-            400, "Add a fingerprint or face photo before running identification"
-        )
-
     gallery = (
         govdb.query(GovPerson)
         .filter(
@@ -287,34 +285,121 @@ def run_match(
             best_score = result["score"]
             best_person = person
 
+    return best_person, best_score, len(gallery)
+
+
+def _create_match_run(
+    db: Session,
+    case: Case,
+    user: User,
+    mode: str,
+    best_person: GovPerson | None,
+    best_score: float,
+    engine_info: dict,
+) -> MatchRun:
     matched = best_person is not None and best_score >= IDENTIFY_MATCH_THRESHOLD
     confidence = fusion.simple_confidence_band(best_score, IDENTIFY_MATCH_THRESHOLD)
 
     run = MatchRun(
         case_id=case.id,
         created_by_id=user.id,
+        mode=mode,
         matched=matched,
         score=round(best_score, 4),
         confidence=confidence if matched else "low",
         gov_person_id=best_person.id if matched and best_person else None,
+        gov_person_name=best_person.name if matched and best_person else None,
+        gov_person_photo_url=best_person.face_photo_path if matched and best_person else None,
         address=best_person.address if matched and best_person else None,
-        engine_info={
-            "fingerprint": "opencv-gabor-orb",
-            "face": face_ai.engine_name(),
-            "fusion": "weighted-linear-v1",
-            "gallery_size": len(gallery),
-        },
+        engine_info=engine_info,
     )
     db.add(run)
 
-    if matched and case.status == "open":
-        case.status = "matched"
+    # Running identification at all — matched or not — is the trigger, not
+    # the outcome: a case moves out of "pending" the moment work starts on it.
+    if case.status == "pending":
+        case.status = "under_investigation"
+
     db.commit()
     db.refresh(run)
+    return run
+
+
+@router.post("/{case_id}/match", response_model=MatchRunOut)
+def run_match(
+    case_id: int,
+    db: Session = Depends(get_db),
+    govdb: Session = Depends(get_govern_db),
+    user: User = Depends(require_roles("officer", "verifier", "admin")),
+):
+    """Compare the case's fingerprint and/or face evidence against govern_db
+    and record a single matched/not-matched verdict — the case's official
+    combined identification outcome (mode="combined").
+
+    Synchronous for the prototype. For production, move the body into a
+    Celery task and return a job id the app polls.
+    """
+    case = _get_case(db, case_id)
+    fp_template, fp_q = _best_fingerprint(case)
+    face_emb, face_q, face_engine = _best_face_embedding(case)
+
+    if not fp_template and not face_emb:
+        raise HTTPException(
+            400, "Add a fingerprint or face photo before running identification"
+        )
+
+    best_person, best_score, gallery_size = _find_best_match(
+        govdb, fp_template, fp_q, face_emb, face_q, face_engine
+    )
+    run = _create_match_run(
+        db, case, user, "combined", best_person, best_score,
+        {
+            "fingerprint": "opencv-gabor-orb",
+            "face": face_ai.engine_name(),
+            "fusion": "weighted-linear-v1",
+            "gallery_size": gallery_size,
+        },
+    )
 
     audit(
         db, user, "run_match", "case", case_id,
-        {"run_id": run.id, "matched": matched, "score": run.score, "gallery": len(gallery)},
+        {"run_id": run.id, "matched": run.matched, "score": run.score, "gallery": gallery_size},
+    )
+    return _serialize_run(run)
+
+
+@router.post("/{case_id}/match/fingerprint", response_model=MatchRunOut)
+def match_fingerprint(
+    case_id: int,
+    db: Session = Depends(get_db),
+    govdb: Session = Depends(get_govern_db),
+    user: User = Depends(require_roles("officer", "verifier", "admin")),
+):
+    """Quick fingerprint-only check against govern_db, for the fingerprint
+    evidence's dedicated detection-and-matching interface.
+
+    Deliberately separate from run_match (the case's official combined
+    fingerprint+face outcome): this creates a mode="fingerprint" MatchRun,
+    which latest_match/record_decision ignore, so a quick check here can
+    never be mistaken for, or accidentally confirmed as, the case's
+    identification result.
+    """
+    case = _get_case(db, case_id)
+    fp_template, fp_q = _best_fingerprint(case)
+    if not fp_template:
+        raise HTTPException(400, "Add a fingerprint before running a fingerprint check")
+
+    best_person, best_score, gallery_size = _find_best_match(
+        govdb, fp_template, fp_q, None, 0.0, ""
+    )
+    run = _create_match_run(
+        db, case, user, "fingerprint", best_person, best_score,
+        {"fingerprint": "opencv-gabor-orb", "gallery_size": gallery_size},
+    )
+
+    audit(
+        db, user, "match_fingerprint", "case", case_id,
+        {"run_id": run.id, "matched": run.matched, "score": run.score, "gallery": gallery_size},
     )
     return _serialize_run(run)
 
@@ -326,7 +411,7 @@ def latest_match(
     _get_case(db, case_id)
     run = (
         db.query(MatchRun)
-        .filter(MatchRun.case_id == case_id)
+        .filter(MatchRun.case_id == case_id, MatchRun.mode == "combined")
         .order_by(MatchRun.id.desc())
         .first()
     )
@@ -351,7 +436,7 @@ def record_decision(
 
     run = (
         db.query(MatchRun)
-        .filter(MatchRun.case_id == case_id)
+        .filter(MatchRun.case_id == case_id, MatchRun.mode == "combined")
         .order_by(MatchRun.id.desc())
         .first()
     )
@@ -359,11 +444,11 @@ def record_decision(
         raise HTTPException(400, "No match to confirm for this case")
 
     if payload.confirmed:
-        case.status = "identified"
+        case.status = "completed"
         case.identified_gov_person_id = run.gov_person_id
         case.identified_address = run.address
     else:
-        case.status = "closed_unidentified"
+        case.status = "not_completed"
         case.identified_gov_person_id = None
         case.identified_address = None
 

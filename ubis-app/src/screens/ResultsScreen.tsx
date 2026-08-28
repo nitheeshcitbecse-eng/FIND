@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 
 import type { RootStackParamList } from '../../App';
-import { api, MatchRun } from '../api';
+import { api, MatchRun, mediaUrl } from '../api';
 import { useAuth } from '../auth';
 import { cardShadow, confidenceColor, softColor, softShadow, theme } from '../theme';
 
@@ -53,8 +54,8 @@ export default function ResultsScreen() {
     Alert.alert(
       confirmed ? 'Confirm identification' : 'Reject this match',
       confirmed
-        ? `Record ${run?.address} as the confirmed identification for this case? This is logged against your account.`
-        : 'Mark this case as closed / unidentified? This is logged against your account.',
+        ? `Record ${run?.name || 'this person'} (${run?.address}) as the confirmed identification for this case? This is logged against your account.`
+        : 'Mark this case as not completed? This is logged against your account.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -104,6 +105,14 @@ export default function ResultsScreen() {
 
       {run.matched ? (
         <View style={styles.card}>
+          {run.photo_url ? (
+            <Image source={{ uri: mediaUrl(run.photo_url) }} style={styles.photo} />
+          ) : (
+            <View style={[styles.photo, styles.photoEmpty]}>
+              <Text style={styles.photoEmptyText}>No photo</Text>
+            </View>
+          )}
+          <Text style={styles.name}>{run.name}</Text>
           <View style={[styles.badge, { backgroundColor: softColor(run.confidence) }]}>
             <Text style={[styles.badgeText, { color }]}>{run.confidence} confidence</Text>
           </View>
@@ -152,7 +161,7 @@ export default function ResultsScreen() {
               onPress={() => decide(false)}
               disabled={busy}
             >
-              <Text style={styles.rejectText}>Reject match / close as unidentified</Text>
+              <Text style={styles.rejectText}>Reject match / mark not completed</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -186,6 +195,17 @@ const styles = StyleSheet.create({
     gap: 10,
     ...cardShadow,
   },
+  photo: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: theme.surfaceAlt,
+    borderWidth: 2,
+    borderColor: theme.border,
+  },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photoEmptyText: { color: theme.textDim, fontSize: 11 },
+  name: { color: theme.text, fontSize: 20, fontWeight: '800', textAlign: 'center' },
   badge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   score: { fontSize: 40, fontWeight: '900' },

@@ -31,9 +31,8 @@ def identify_by_fingerprint(
     app, not for browsing. Only the biometrics actually captured — fingerprint,
     and face if a photo is supplied — are compared against govern_db, the
     government identity database (a separate database, read-only from this
-    app; see govern_models.py). On a match, only the registered address is
-    returned — never the person's name, photo, or any other government
-    record detail.
+    app; see govern_models.py). On a match, the record's name, address, and
+    photo are returned so the officer can visually confirm the identity.
     """
     with save_upload(fingerprint, "identify/fingerprints") as (_, fp_path):
         try:
@@ -115,7 +114,9 @@ def identify_by_fingerprint(
             confidence="low",
             score=round(best_score, 4),
             quality=probe_fp["quality"],
+            name=None,
             address=None,
+            photo_url=None,
             message="No person found.",
         )
 
@@ -124,6 +125,8 @@ def identify_by_fingerprint(
         confidence=confidence,
         score=round(best_score, 4),
         quality=probe_fp["quality"],
+        name=best_person.name,
         address=best_person.address,
+        photo_url=best_person.face_photo_path,
         message="Match found in the government database.",
     )

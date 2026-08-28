@@ -36,8 +36,8 @@ class Case(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     case_number: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    # status: open | matched | identified | closed_unidentified
-    status: Mapped[str] = mapped_column(String(32), default="open")
+    # status: pending | under_investigation | completed | not_completed
+    status: Mapped[str] = mapped_column(String(32), default="pending")
 
     found_location: Mapped[str] = mapped_column(String(256), default="")
     found_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -97,6 +97,13 @@ class MatchRun(Base):
     case_id: Mapped[int] = mapped_column(ForeignKey("cases.id"), index=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
+    # "combined" = fingerprint+face case-level check (run_match); "fingerprint"
+    # = the fingerprint-only quick-check (match_fingerprint). record_decision
+    # and latest_match only ever consider "combined" rows as the case's
+    # official identification outcome — a quick-check must never be
+    # mistaken for, or accidentally confirmed as, that outcome.
+    mode: Mapped[str] = mapped_column(String(16), default="combined")
+
     matched: Mapped[bool] = mapped_column(default=False)
     score: Mapped[float] = mapped_column(Float, default=0.0)
     confidence: Mapped[str] = mapped_column(String(16), default="low")
@@ -104,8 +111,10 @@ class MatchRun(Base):
     # References govern_db.GovPerson.id — a separate database/engine, so this
     # is a plain unenforced integer, never a real ForeignKey.
     gov_person_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Denormalized copy of GovPerson.address captured at match time, so
+    # Denormalized copy of GovPerson fields captured at match time, so
     # displaying/auditing a past result never needs a second govern_db query.
+    gov_person_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    gov_person_photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     engine_info: Mapped[dict | None] = mapped_column(JSON, nullable=True)

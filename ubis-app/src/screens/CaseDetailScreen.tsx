@@ -189,6 +189,11 @@ export default function CaseDetailScreen() {
                 <TouchableOpacity
                   key={evidence.id}
                   style={styles.thumbWrap}
+                  onPress={
+                    group.key === 'fingerprint'
+                      ? () => navigation.navigate('FingerprintCheck', { caseId, evidenceId: evidence.id })
+                      : undefined
+                  }
                   onLongPress={() => removeEvidence(evidence)}
                 >
                   <Image source={{ uri: mediaUrl(evidence.file_path) }} style={styles.thumb} />
@@ -201,6 +206,9 @@ export default function CaseDetailScreen() {
                     <Text style={styles.thumbMeta} numberOfLines={1}>
                       {evidence.extracted.labels.slice(0, 2).join(', ')}
                     </Text>
+                  ) : null}
+                  {group.key === 'fingerprint' ? (
+                    <Text style={styles.thumbLink}>Analyze →</Text>
                   ) : null}
                 </TouchableOpacity>
               ))}
@@ -280,6 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButtonText: { color: theme.accent, fontWeight: '700', fontSize: 13 },
+  thumbLink: { color: theme.accent, fontSize: 10, fontWeight: '700', marginTop: 2 },
   strip: { marginTop: 12 },
   thumbWrap: { marginRight: 10, width: 84 },
   thumb: {

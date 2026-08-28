@@ -11,7 +11,9 @@ export type FingerprintIdentifyResult = {
   score: number;
   quality: number;
   message: string;
+  name: string | null;
   address: string | null;
+  photo_url: string | null;
 };
 
 export type Evidence = {
@@ -51,7 +53,9 @@ export type MatchRun = {
   case_id: number;
   created_at: string;
   matched: boolean;
+  name: string | null;
   address: string | null;
+  photo_url: string | null;
   score: number;
   confidence: string;
   message: string;
@@ -168,6 +172,9 @@ export const api = {
     request<void>(`/cases/${caseId}/evidence/${evidenceId}`, { method: 'DELETE' }),
 
   runMatch: (caseId: number) => request<MatchRun>(`/cases/${caseId}/match`, { method: 'POST' }),
+
+  matchFingerprint: (caseId: number) =>
+    request<MatchRun>(`/cases/${caseId}/match/fingerprint`, { method: 'POST' }),
 
   latestMatch: (caseId: number) => request<MatchRun>(`/cases/${caseId}/matches/latest`),
 

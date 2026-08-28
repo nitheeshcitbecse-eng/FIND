@@ -17,6 +17,7 @@ import NewCaseScreen from './src/screens/NewCaseScreen';
 import CaseDetailScreen from './src/screens/CaseDetailScreen';
 import ResultsScreen from './src/screens/ResultsScreen';
 import IdentifyScreen from './src/screens/IdentifyScreen';
+import FingerprintCheckScreen from './src/screens/FingerprintCheckScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   CaseDetail: { caseId: number };
   Results: { caseId: number; runFresh?: boolean };
   Identify: undefined;
+  FingerprintCheck: { caseId: number; evidenceId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,6 +88,11 @@ function Router() {
               name="Identify"
               component={IdentifyScreen}
               options={{ title: 'Identify by Fingerprint' }}
+            />
+            <Stack.Screen
+              name="FingerprintCheck"
+              component={FingerprintCheckScreen}
+              options={{ title: 'Fingerprint Analysis' }}
             />
           </>
         )}

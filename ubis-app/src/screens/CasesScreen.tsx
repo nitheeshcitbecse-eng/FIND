@@ -14,20 +14,20 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
 import { api, CaseBrief } from '../api';
 import { useAuth } from '../auth';
-import { cardShadow, softShadow, theme } from '../theme';
+import { softShadow, theme } from '../theme';
 
 const STATUS_COLORS: Record<string, string> = {
-  open: theme.textDim,
-  matched: theme.medium,
-  identified: theme.high,
-  closed_unidentified: theme.low,
+  pending: theme.textDim,
+  under_investigation: theme.medium,
+  completed: theme.high,
+  not_completed: theme.low,
 };
 
 const STATUS_SOFT: Record<string, string> = {
-  open: theme.lowSoft,
-  matched: theme.mediumSoft,
-  identified: theme.highSoft,
-  closed_unidentified: theme.lowSoft,
+  pending: theme.lowSoft,
+  under_investigation: theme.mediumSoft,
+  completed: theme.highSoft,
+  not_completed: theme.lowSoft,
 };
 
 export default function CasesScreen() {

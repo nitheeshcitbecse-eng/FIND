@@ -11,7 +11,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useShareIntentContext } from 'expo-share-intent';
 
-import { api, FingerprintIdentifyResult } from '../api';
+import { api, FingerprintIdentifyResult, mediaUrl } from '../api';
 import { cardShadow, confidenceColor, softColor, softShadow, theme } from '../theme';
 
 export default function IdentifyScreen() {
@@ -146,6 +146,14 @@ export default function IdentifyScreen() {
       {result && !busy ? (
         result.matched ? (
           <View style={styles.resultCard}>
+            {result.photo_url ? (
+              <Image source={{ uri: mediaUrl(result.photo_url) }} style={styles.photo} />
+            ) : (
+              <View style={[styles.photo, styles.photoEmpty]}>
+                <Text style={styles.photoEmptyText}>No photo</Text>
+              </View>
+            )}
+            <Text style={styles.name}>{result.name}</Text>
             <View style={[styles.badge, { backgroundColor: softColor(result.confidence) }]}>
               <Text style={[styles.badgeText, { color: confidenceColor(result.confidence) }]}>
                 {result.confidence} confidence · {(result.score * 100).toFixed(1)}%
@@ -213,6 +221,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...cardShadow,
   },
+  photo: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: theme.surfaceAlt,
+    borderWidth: 2,
+    borderColor: theme.border,
+  },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photoEmptyText: { color: theme.textDim, fontSize: 11 },
+  name: { color: theme.text, fontSize: 18, fontWeight: '800', textAlign: 'center' },
   badge: {
     alignSelf: 'center',
     borderRadius: 20,

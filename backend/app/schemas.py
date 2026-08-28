@@ -22,7 +22,9 @@ class FingerprintIdentifyResult(BaseModel):
     score: float
     quality: float
     message: str
+    name: str | None = None
     address: str | None = None
+    photo_url: str | None = None
 
 
 class CaseCreate(BaseModel):
@@ -87,7 +89,9 @@ class MatchRunOut(BaseModel):
     case_id: int
     created_at: datetime
     matched: bool
+    name: str | None
     address: str | None
+    photo_url: str | None
     score: float
     confidence: str
     message: str

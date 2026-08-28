@@ -16,10 +16,11 @@
         "backgroundColor": "#0B0F14"
       },
       "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -46,15 +47,18 @@
       [
         "expo-share-intent",
         {
-          "androidIntentFilters": ["image/*"],
+          "androidIntentFilters": [
+            "image/*"
+          ],
           "disableIOS": true
         }
       ]
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "64700c37-a852-40fa-abd6-75d1188f98b2"
       }
-    }
+    },
+    "owner": "nitheesh_123"
   }
 }
